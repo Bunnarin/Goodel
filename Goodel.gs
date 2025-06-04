@@ -1,8 +1,6 @@
 function Goodel (sheetName) {
   return Goodel.Modeler(sheetName);
 }
-
-
 /*
  * Modeler takes the name of the sheet where the table is kept.
  * It expects the first row to be a header with column names
@@ -44,6 +42,27 @@ Goodel.Modeler = function (sheetName) {
 
 Goodel._modelClassMethods = function () {}
 
+Goodel._modelClassMethods.all = function () {
+  var allRecords = [];
+  var sheet = this.sheet;
+  var columns = this.columns; // Header columns
+
+  // Get all values from the sheet, excluding the header row
+  // Start from row 2 (index 1 in a 0-indexed array) up to the last row
+  var dataRange = sheet.getRange(2, 1, this.table.numRows - 1, this.table.numColumns); //- 1 to exclude the header
+  var values = dataRange.getValues();
+
+  for (var i = 0; i < values.length; i++) {
+    var rowData = values[i];
+    var recordHash = {};
+    for (var j = 0; j < columns.length; j++) {
+      recordHash[columns[j]] = rowData[j];
+    }
+    allRecords.push(new this(recordHash)); // Create a new Model instance
+  }
+  return allRecords;
+};
+
 Goodel._modelClassMethods.findWhere = function (searchHash) {
   return this.table.findWhere(searchHash);
 }
@@ -53,6 +72,91 @@ Goodel._modelClassMethods.findBy = function (searchHash) {
 
   return new this(attrs);
 }
+
+Goodel._modelClassMethods.findRowBy = function (searchHash) {
+  return this.table.customManFindBy(searchHash);
+}
+
+Goodel._modelClassMethods.findRowWhere = function (searchHash) {
+  return this.table.customManFindWhere(searchHash);
+}
+
+Goodel._modelClassMethods.getAllByColumn = function (columnName) {
+  var columnIdx = this.table.columnMap[columnName];
+
+  if (columnIdx === undefined) {
+    this.table._throwBadAttrMsg(columnName);
+  }
+
+  var values = [];
+  for (var rowIdx = 2; rowIdx <= this.table.numRows; rowIdx++) {
+    values.push(this.table.getCell(rowIdx, columnIdx).getValue());
+  }
+  return values;
+};
+
+// Append this to your Goodel._modelClassMethods
+Goodel._modelClassMethods.filterWhere = function (callback) {
+  var searchResults = [];
+  var allRecords = this.all(); // Use the 'all' method we just added
+
+  for (var i = 0; i < allRecords.length; i++) {
+    var record = allRecords[i];
+    if (callback(record)) {
+      searchResults.push(record);
+    }
+  }
+  return searchResults;
+};
+
+// Append this to your Goodel._modelClassMethods
+Goodel._modelClassMethods.filterOneWhere = function (callback) {
+  var allRecords = this.all();
+  for (var i = 0; i < allRecords.length; i++) {
+    var record = allRecords[i];
+    if (callback(record)) {
+      return record; // Return the first match
+    }
+  }
+  return null; // No match found
+};
+
+Goodel._modelClassMethods.setColumnValues = function (columnName, value) {
+  var columnIdx = this.table.columnMap[columnName];
+
+  if (columnIdx === undefined) {
+    this.table._throwBadAttrMsg(columnName);
+  }
+
+  // Get the range for the entire column, starting from the second row (after headers)
+  // The number of rows will be the total number of rows in the table minus the header row.
+  var columnRange = this.sheet.getRange(2, columnIdx, this.table.numRows - 1, 1);
+
+  // Create an array of arrays with the desired value for each cell in the column
+  var valuesToSet = [];
+  for (var i = 0; i < this.table.numRows - 1; i++) {
+    valuesToSet.push([value]);
+  }
+
+  // Set the values for the entire column
+  columnRange.setValues(valuesToSet);
+};
+
+Goodel._modelClassMethods.setCellValueWhere = function (searchHash, columnName, newValue) {
+  var rowsIdxToSet = this.table.customManFindWhere(searchHash);
+
+  if (!rowsIdxToSet || rowsIdxToSet.length == 0) {
+    Logger.log("No records found matching the search criteria.");
+    return; // No records to update
+  }
+
+  var columnIdxToSet = this.table.columnMap[columnName];
+  if (columnIdxToSet === undefined) this.table._throwBadAttrMsg(columnName);
+
+  var sheet = this.sheet;
+
+  for (const rowIdx of rowsIdxToSet) sheet.getRange(rowIdx, columnIdxToSet).setValue(newValue);
+};
 
 Goodel._modelClassMethods.create = function (recordHash) {
   var newRecord = [], len = this.columns.length, i;
@@ -263,6 +367,55 @@ Goodel.Table.prototype.natFindWhere = function (searchHash) {
   return searchResults;
 }
 
+Goodel.Table.prototype.customManFindBy = function (searchHash) {
+
+  // Loop through rows
+  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+
+    // Check match for every search key
+    var isAMatch = true;
+    for (var searchKey in searchHash) {
+      var columnIdx = this.columnMap[searchKey];
+ 
+      if (columnIdx == undefined) this._throwBadAttrMsg(searchKey);
+ 
+      var attribute = this.getCell(rowIdx, columnIdx).getValue();
+
+      if (searchHash[searchKey] != attribute) isAMatch = false;
+    }
+
+    // Return record when first match is found
+    if (isAMatch) return rowIdx - 1; //translate it to 0-based
+
+  }
+  // Return null if no matches are found
+  return;
+}
+
+Goodel.Table.prototype.customManFindWhere = function (searchHash) {
+  var rowIdxResults = [];
+  
+  // Loop through rows
+  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+    var isAMatch = true;
+
+    // Check match for every search key
+    for (var searchKey in searchHash) {
+      var columnIdx = this.columnMap[searchKey];
+
+      if (columnIdx == undefined) this._throwBadAttrMsg(searchKey);
+
+      var attribute = this.getCell(rowIdx, columnIdx).getValue();
+      if (searchHash[searchKey] != attribute) isAMatch = false;
+    }
+
+    // Add record to results array if it's a match
+    if (isAMatch) rowIdxResults.push(rowIdx);
+  }
+
+  return rowIdxResults;
+}
+
 Goodel.Table.prototype._buildSearchConditions = function (searchHash) {
   var searchConditions = "";
 
@@ -340,11 +493,9 @@ Goodel.Table.prototype.getEmptyRowIdx = function () {
 }
 
 Goodel.Table.prototype.getEmptyColumnIdx = function () {
-  var columnIdx = 1;
+  let columnIdx = 1;
 
-  while (this.getCell(1, columnIdx).getValue() != "") {
-    columnIdx += 1;
-  }
+  while (this.getCell(1, columnIdx).getValue() != "") columnIdx++;
   
   return columnIdx;
 }
@@ -362,4 +513,3 @@ Goodel.Table.prototype._buildColumnMap = function () {
   
   this.columnMap = columnMap;
 }
-
