@@ -20,9 +20,7 @@ Goodel.Modeler = function (sheetName) {
 
   function Model (instanceAttrHash) {
     this.model = Model;
-    for (var attr in instanceAttrHash) {
-      this[attr] = instanceAttrHash[attr];
-    }
+    for (var attr in instanceAttrHash) this[attr] = instanceAttrHash[attr];
   }
 
   Model.sheet = sheet;
@@ -55,9 +53,7 @@ Goodel._modelClassMethods.all = function () {
   for (var i = 0; i < values.length; i++) {
     var rowData = values[i];
     var recordHash = {};
-    for (var j = 0; j < columns.length; j++) {
-      recordHash[columns[j]] = rowData[j];
-    }
+    for (let j = 0; j < columns.length; j++) recordHash[columns[j]] = rowData[j];
     allRecords.push(new this(recordHash)); // Create a new Model instance
   }
   return allRecords;
@@ -84,9 +80,7 @@ Goodel._modelClassMethods.findRowWhere = function (searchHash) {
 Goodel._modelClassMethods.getAllByColumn = function (columnName) {
   var columnIdx = this.table.columnMap[columnName];
 
-  if (columnIdx === undefined) {
-    this.table._throwBadAttrMsg(columnName);
-  }
+  if (columnIdx === undefined) this.table._throwBadAttrMsg(columnName);
 
   var values = [];
   for (var rowIdx = 2; rowIdx <= this.table.numRows; rowIdx++) {
@@ -102,21 +96,17 @@ Goodel._modelClassMethods.filterWhere = function (callback) {
 
   for (var i = 0; i < allRecords.length; i++) {
     var record = allRecords[i];
-    if (callback(record)) {
-      searchResults.push(record);
-    }
+    if (callback(record)) searchResults.push(record);
   }
   return searchResults;
 };
 
 // Append this to your Goodel._modelClassMethods
-Goodel._modelClassMethods.filterOneWhere = function (callback) {
+Goodel._modelClassMethods.filterBy = function (callback) {
   var allRecords = this.all();
   for (var i = 0; i < allRecords.length; i++) {
     var record = allRecords[i];
-    if (callback(record)) {
-      return record; // Return the first match
-    }
+    if (callback(record)) return record; // Return the first match
   }
   return null; // No match found
 };
@@ -124,9 +114,7 @@ Goodel._modelClassMethods.filterOneWhere = function (callback) {
 Goodel._modelClassMethods.setColumnValues = function (columnName, value) {
   var columnIdx = this.table.columnMap[columnName];
 
-  if (columnIdx === undefined) {
-    this.table._throwBadAttrMsg(columnName);
-  }
+  if (columnIdx === undefined) this.table._throwBadAttrMsg(columnName);
 
   // Get the range for the entire column, starting from the second row (after headers)
   // The number of rows will be the total number of rows in the table minus the header row.
@@ -134,28 +122,118 @@ Goodel._modelClassMethods.setColumnValues = function (columnName, value) {
 
   // Create an array of arrays with the desired value for each cell in the column
   var valuesToSet = [];
-  for (var i = 0; i < this.table.numRows - 1; i++) {
-    valuesToSet.push([value]);
-  }
+  for (var i = 0; i < this.table.numRows - 1; i++) valuesToSet.push([value]);
 
   // Set the values for the entire column
   columnRange.setValues(valuesToSet);
 };
 
-Goodel._modelClassMethods.setCellValueWhere = function (searchHash, columnName, newValue) {
-  var rowsIdxToSet = this.table.customManFindWhere(searchHash);
+Goodel._modelClassMethods.updateWhere = function (searchHash, updateHash) {
+  // Get the row indices that match the search criteria.
+  // Assuming customManFindWhere now returns an array of row indices.
+  var rowsIdxToUpdate = this.table.customManFindWhere(searchHash);
 
-  if (!rowsIdxToSet || rowsIdxToSet.length == 0) {
-    Logger.log("No records found matching the search criteria.");
-    return; // No records to update
+  if (!rowsIdxToUpdate || rowsIdxToUpdate.length === 0) {
+    Logger.log("No records found matching the search criteria for update.");
+    return;
   }
 
-  var columnIdxToSet = this.table.columnMap[columnName];
-  if (columnIdxToSet === undefined) this.table._throwBadAttrMsg(columnName);
+  var sheet = this.sheet;
+  var columnMap = this.table.columnMap;
+
+  // Iterate over each column in the updateHash
+  for (var columnName in updateHash) {
+    if (updateHash.hasOwnProperty(columnName)) {
+      var newValue = updateHash[columnName];
+      var columnIdxToSet = columnMap[columnName];
+
+      if (columnIdxToSet === undefined) {
+        // If a column in updateHash doesn't exist, throw an error
+        this.table._throwBadAttrMsg(columnName);
+      }
+
+      // For each matching row, set the new value for the current column
+      for (var i = 0; i < rowsIdxToUpdate.length; i++) {
+        var rowIdx = rowsIdxToUpdate[i];
+        sheet.getRange(rowIdx, columnIdxToSet).setValue(newValue);
+      }
+    }
+  }
+};
+
+Goodel._modelClassMethods.updateBy = function (searchHash, updateHash) {
+  // Use the existing findBy to get the first matching record as a hash
+  var matchingRecord = this.findBy(searchHash); // This returns a Model instance
+  
+  if (!matchingRecord) {
+    Logger.log("No record found matching the search criteria for updateBy.");
+    return; // No record to update
+  }
+
+  const rowIdxToUpdate = this.table.customManFindBy(searchHash);
+
+  if (rowIdxToUpdate === undefined || rowIdxToUpdate === null) {
+    Logger.log("Could not determine row index for updateBy.");
+    return;
+  }
+
+  var sheet = this.sheet;
+  var columnMap = this.table.columnMap;
+
+  // Iterate over each column in the updateHash and set its new value
+  for (var columnName in updateHash) {
+    if (updateHash.hasOwnProperty(columnName)) {
+      var newValue = updateHash[columnName];
+      var columnIdxToSet = columnMap[columnName];
+
+      if (columnIdxToSet === undefined) {
+        this.table._throwBadAttrMsg(columnName);
+      }
+      sheet.getRange(rowIdxToUpdate, columnIdxToSet).setValue(newValue);
+    }
+  }
+};
+
+Goodel._modelClassMethods.deleteWhere = function (searchHash) {
+  // Use customManFindWhere which returns an array of row indices
+  var rowsIdxToDelete = this.table.customManFindWhere(searchHash);
+
+  if (!rowsIdxToDelete || rowsIdxToDelete.length === 0) {
+    Logger.log("No records found matching the search criteria for deleteWhere.");
+    return;
+  }
 
   var sheet = this.sheet;
 
-  for (const rowIdx of rowsIdxToSet) sheet.getRange(rowIdx, columnIdxToSet).setValue(newValue);
+  // IMPORTANT: When deleting multiple rows, it's most efficient to delete them
+  // from the highest row index to the lowest. This prevents the row indices
+  // from shifting as you delete, which would cause incorrect deletions if
+  // you delete from top down.
+  rowsIdxToDelete.sort(function(a, b) { return b - a; }); // Sort descending
+
+  for (var i = 0; i < rowsIdxToDelete.length; i++) {
+    var rowIdx = rowsIdxToDelete[i];
+    sheet.deleteRow(rowIdx);
+  }
+
+  // Update the table's row count by the number of deleted rows
+  this.table.numRows -= rowsIdxToDelete.length;
+};
+
+Goodel._modelClassMethods.deleteBy = function (searchHash) {
+  // Similar to updateBy, we need the row index to delete.
+  const rowIdxToDelete = this.table.customManFindBy(searchHash);
+
+  if (rowIdxToDelete === undefined || rowIdxToDelete === null) {
+    Logger.log("No record found matching the search criteria for deleteBy.");
+    return;
+  }
+
+  // Delete the entire row
+  this.sheet.deleteRow(rowIdxToDelete);
+
+  // Crucially, update the table's row count after deletion
+  this.table.numRows--;
 };
 
 Goodel._modelClassMethods.create = function (recordHash) {
@@ -227,20 +305,14 @@ Goodel.Table.prototype.findBy = function (searchHash) {
    * Otherwise, make one query per row.
    */
   
-  if (this.numRows * this.numColumns > 50 ) {
-    return this.natFindBy(searchHash);
-  } else {
-    return this.manFindBy(searchHash);
-  }
+  if (this.numRows * this.numColumns > 50 ) return this.natFindBy(searchHash);
+  else return this.manFindBy(searchHash);
 }
 
 Goodel.Table.prototype.findWhere = function (searchHash) {
   // Same as above
-  if (this.numRows * this.numColumns > 50) {
-    return this.natFindWhere(searchHash);
-  } else {
-    return this.manFindWhere(searchHash);
-  }
+  if (this.numRows * this.numColumns > 50) return this.natFindWhere(searchHash);
+  else return this.manFindWhere(searchHash);
 }
 
 Goodel.Table.prototype.manFindBy = function (searchHash) {
@@ -459,12 +531,9 @@ Goodel.Table.prototype._hashifyRow = function (row) {
   
   for (i = 0; i < len; i++) {
 
-    var attr = this.columns[i];
-    if (row[i] == "") {
-      record[attr] = null;
-    } else {
-      record[attr] = row[i];
-    }
+    const attr = this.columns[i];
+    if (row[i] == "") record[attr] = null;
+    else record[attr] = row[i];
 
   }
   return record;
@@ -483,11 +552,9 @@ Goodel.Table.prototype.getRange = function (row, col, nRows, nCols) {
 }
 
 Goodel.Table.prototype.getEmptyRowIdx = function () {
-  var rowIdx = 1;
+  let rowIdx = 1;
 
-  while (this.getCell(rowIdx, 1).getValue() != "") {
-    rowIdx += 1;
-  }
+  while (this.getCell(rowIdx, 1).getValue() != "") rowIdx += 1;
 
   return rowIdx;
 }
@@ -506,10 +573,7 @@ Goodel.Table.prototype._buildColumnMap = function () {
       columns = this.getRow(1).getValues()[0],
       i;
   
-  for (i = 0; i < len; i++) {
-    var column = columns[i];
-    columnMap[column] = i + 1;
-  }
+  for (i = 0; i < len; i++) columnMap[columns[i]] = i + 1;
   
   this.columnMap = columnMap;
 }
