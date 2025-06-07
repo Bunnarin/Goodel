@@ -1,14 +1,16 @@
-function Goodel (sheetName) {
-  return Goodel.Modeler(sheetName);
+function Goodel (sheetName, ssUrl) {
+  return Goodel.Modeler(sheetName, ssUrl);
 }
 /*
  * Modeler takes the name of the sheet where the table is kept.
  * It expects the first row to be a header with column names
  * Ie. it won't search that row.
  */
-Goodel.Modeler = function (sheetName) {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet(),
-      sheet = spreadsheet.getSheetByName(sheetName),
+Goodel.Modeler = function (sheetName, ssUrl) {
+  let spreadsheet;
+  if (ssUrl) spreadsheet = SpreadsheetApp.openByUrl(ssUrl);
+  else spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName(sheetName),
       table = new Goodel.Table(sheet),
       columns = table.getRow(1).getValues()[0];
 
@@ -153,8 +155,7 @@ Goodel._modelClassMethods.updateWhere = function (searchHash, updateHash) {
       }
 
       // For each matching row, set the new value for the current column
-      for (var i = 0; i < rowsIdxToUpdate.length; i++) {
-        var rowIdx = rowsIdxToUpdate[i];
+      for (const rowIdx of rowsIdxToUpdate) {
         sheet.getRange(rowIdx, columnIdxToSet).setValue(newValue);
       }
     }
@@ -254,6 +255,34 @@ Goodel._modelClassMethods.create = function (recordHash) {
   return newRecord;
 }
 
+Goodel._modelClassMethods.clearAllData = function () {
+  var sheet = this.sheet;
+  var numRows = this.table.numRows; // Current number of data rows (excluding header)
+
+  if (numRows === 0) {
+    Logger.log("Sheet is already empty, no data to clear.");
+    return;
+  }
+
+  // Determine the range to clear.
+  // Start from row 2 (after the header) and clear all existing data rows.
+  var startRow = 2;
+  var numRowsToClear = numRows; // Clear all existing data rows
+
+  // Get the range covering all data below the header
+  var dataRange = sheet.getRange(startRow, 1, numRowsToClear, this.table.numColumns);
+
+  // Clear the content and formatting
+  dataRange.clearContent();
+  // Optionally, you might want to clear formatting as well:
+  // dataRange.clear({contentsOnly: false, formatsOnly: true, validationsOnly: true});
+
+  // Reset the internal row count of the table to 0, as all data rows are now empty
+  this.table.numRows = 0;
+
+  Logger.log("All data cleared from sheet: " + sheet.getName());
+};
+
 Goodel._modelClassMethods.toString = function () {
   return "{ sheet: <sheet>, columns: <columns> }"
           .replace("<sheet>", this.sheet.getName())
@@ -318,7 +347,7 @@ Goodel.Table.prototype.findWhere = function (searchHash) {
 Goodel.Table.prototype.manFindBy = function (searchHash) {
 
   // Loop through rows
-  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
 
     // Check match for every search key
     var isAMatch = true;
@@ -348,7 +377,7 @@ Goodel.Table.prototype.manFindWhere = function (searchHash) {
   var searchResults = [];
   
   // Loop through rows
-  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
     var isAMatch = true;
 
     // Check match for every search key
@@ -442,7 +471,7 @@ Goodel.Table.prototype.natFindWhere = function (searchHash) {
 Goodel.Table.prototype.customManFindBy = function (searchHash) {
 
   // Loop through rows
-  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
 
     // Check match for every search key
     var isAMatch = true;
@@ -457,7 +486,7 @@ Goodel.Table.prototype.customManFindBy = function (searchHash) {
     }
 
     // Return record when first match is found
-    if (isAMatch) return rowIdx - 1; //translate it to 0-based
+    if (isAMatch) return rowIdx; //keep it to 1-based
 
   }
   // Return null if no matches are found
@@ -468,7 +497,7 @@ Goodel.Table.prototype.customManFindWhere = function (searchHash) {
   var rowIdxResults = [];
   
   // Loop through rows
-  for (var rowIdx = 1; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
     var isAMatch = true;
 
     // Check match for every search key
