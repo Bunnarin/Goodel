@@ -49,7 +49,7 @@ Goodel._modelClassMethods.all = function () {
 
   // Get all values from the sheet, excluding the header row
   // Start from row 2 (index 1 in a 0-indexed array) up to the last row
-  var dataRange = sheet.getRange(2, 1, this.table.numRows - 1, this.table.numColumns); //- 1 to exclude the header
+  var dataRange = sheet.getRange(2, 1, this.table.numRows, this.table.numColumns);
   var values = dataRange.getValues();
 
   for (var i = 0; i < values.length; i++) {
@@ -85,7 +85,7 @@ Goodel._modelClassMethods.getAllByColumn = function (columnName) {
   if (columnIdx === undefined) this.table._throwBadAttrMsg(columnName);
 
   var values = [];
-  for (var rowIdx = 2; rowIdx <= this.table.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx < this.table.numRows + 2; rowIdx++) {
     values.push(this.table.getCell(rowIdx, columnIdx).getValue());
   }
   return values;
@@ -315,14 +315,14 @@ Goodel._ModelInstance.prototype.toString = function () {
 }
 
 
-var ALPHABET = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+const ALPHABET = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
 Goodel.Table = function (sheet) {
   this.sheet = sheet;
-  this.numColumns = this.getEmptyColumnIdx() - 1;
-  this.numRows = this.getEmptyRowIdx() - 1;
+  this.numColumns = sheet.getLastColumn(); //no -1 cuz it doesnt have a header column like a row has a header row
+  this.numRows = sheet.getLastRow() - 1; 
   this.columns = this.getRow(1).getValues()[0];
   this.columnMap = null;
   this._buildColumnMap();
@@ -347,7 +347,7 @@ Goodel.Table.prototype.findWhere = function (searchHash) {
 Goodel.Table.prototype.manFindBy = function (searchHash) {
 
   // Loop through rows
-  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx < this.numRows + 2; rowIdx++) {
 
     // Check match for every search key
     var isAMatch = true;
@@ -377,7 +377,7 @@ Goodel.Table.prototype.manFindWhere = function (searchHash) {
   var searchResults = [];
   
   // Loop through rows
-  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx < this.numRows + 2; rowIdx++) {
     var isAMatch = true;
 
     // Check match for every search key
@@ -471,7 +471,7 @@ Goodel.Table.prototype.natFindWhere = function (searchHash) {
 Goodel.Table.prototype.customManFindBy = function (searchHash) {
 
   // Loop through rows
-  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx < this.numRows + 2; rowIdx++) {
 
     // Check match for every search key
     var isAMatch = true;
@@ -497,7 +497,7 @@ Goodel.Table.prototype.customManFindWhere = function (searchHash) {
   var rowIdxResults = [];
   
   // Loop through rows
-  for (var rowIdx = 2; rowIdx <= this.numRows; rowIdx++) {
+  for (var rowIdx = 2; rowIdx < this.numRows + 2; rowIdx++) {
     var isAMatch = true;
 
     // Check match for every search key
@@ -581,19 +581,11 @@ Goodel.Table.prototype.getRange = function (row, col, nRows, nCols) {
 }
 
 Goodel.Table.prototype.getEmptyRowIdx = function () {
-  let rowIdx = 1;
-
-  while (this.getCell(rowIdx, 1).getValue() != "") rowIdx += 1;
-
-  return rowIdx;
+  return this.sheet.getLastRow();
 }
 
 Goodel.Table.prototype.getEmptyColumnIdx = function () {
-  let columnIdx = 1;
-
-  while (this.getCell(1, columnIdx).getValue() != "") columnIdx++;
-  
-  return columnIdx;
+  return this.sheet.getLastColumn();
 }
 
 Goodel.Table.prototype._buildColumnMap = function () {
