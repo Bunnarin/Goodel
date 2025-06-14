@@ -423,8 +423,15 @@ Goodel.Table.prototype.natFindBy = function (searchHash) {
   firstCell.setFormula(searchFormula);
 
   var firstCellValue = firstCell.getValue();
-  if (firstCellValue == "#N/A") return null;
-  if (firstCellValue == "#ERROR!") throw new Error("Query error");
+  if (firstCellValue == "#N/A") {
+    spreadsheet.deleteSheet(tempSheet);
+    return null;
+  }
+
+  else if (firstCellValue == "#ERROR!") {
+    spreadsheet.deleteSheet(tempSheet);
+    throw new Error("Query error");
+  }
 
   var matchingRow = tempSheet.getRange(1, 1, 1, this.numColumns).getValues()[0];
   var matchingRecord = this._hashifyRow(matchingRow);
@@ -451,8 +458,14 @@ Goodel.Table.prototype.natFindWhere = function (searchHash) {
   firstCell.setFormula(searchFormula);
 
   var firstCellValue = firstCell.getValue();
-  if (firstCellValue == "#N/A") return null;
-  if (firstCellValue == "#ERROR!") throw new Error("Query error");
+  if (firstCellValue == "#N/A") {
+    spreadsheet.deleteSheet(tempSheet);
+    return null;
+  }
+  if (firstCellValue == "#ERROR!") {
+    spreadsheet.deleteSheet(tempSheet);
+    throw new Error("Query error");
+  } 
 
   // If one or more records were found,
   // loop through them and add them to the results array
@@ -524,14 +537,15 @@ Goodel.Table.prototype._buildSearchConditions = function (searchHash) {
     var searchColumn = ALPHABET[this.columnMap[key] - 1];
 
     if (searchColumn === undefined) this._throwBadAttrMsg(key);
-
-    var condition = '<table>!<searchCol>2:<searchCol><lastRow> = "<searchVal>"'
+    let condition = '<table>!<searchCol>2:<searchCol><lastRow> = "<searchVal>"'
                       .replace("<table>", this.sheet.getName())
                       .replace(/<searchCol>/g, searchColumn)
-                      .replace("<lastRow>", this.getEmptyRowIdx() - 1)
-                      .replace("<searchVal>", searchHash[key]);
-
-
+                      .replace("<lastRow>", this.getEmptyRowIdx() - 1);
+    if (typeof searchHash[key] == "number") {
+      condition = condition.replace('"<searchVal>"', searchHash[key]);
+    }
+    else condition = condition.replace("<searchVal>", searchHash[key]);
+    
     searchConditions += condition + ',';
   }
   
@@ -581,11 +595,19 @@ Goodel.Table.prototype.getRange = function (row, col, nRows, nCols) {
 }
 
 Goodel.Table.prototype.getEmptyRowIdx = function () {
-  return this.sheet.getLastRow();
+  let rowIdx = 1;
+
+  while (this.getCell(rowIdx, 1).getValue() != "") rowIdx += 1;
+
+  return rowIdx;
 }
 
 Goodel.Table.prototype.getEmptyColumnIdx = function () {
-  return this.sheet.getLastColumn();
+  let columnIdx = 1;
+
+  while (this.getCell(1, columnIdx).getValue() != "") columnIdx++;
+  
+  return columnIdx;
 }
 
 Goodel.Table.prototype._buildColumnMap = function () {
