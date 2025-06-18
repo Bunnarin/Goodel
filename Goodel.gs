@@ -120,11 +120,12 @@ Goodel._modelClassMethods.setColumnValues = function (columnName, value) {
 
   // Get the range for the entire column, starting from the second row (after headers)
   // The number of rows will be the total number of rows in the table minus the header row.
-  var columnRange = this.sheet.getRange(2, columnIdx, this.table.numRows - 1, 1);
+  var columnRange = this.sheet.getRange(2, columnIdx, this.table.numRows, 1);
 
   // Create an array of arrays with the desired value for each cell in the column
   var valuesToSet = [];
-  for (var i = 0; i < this.table.numRows - 1; i++) valuesToSet.push([value]);
+  for (var i = 0; i < this.table.numRows; i++) 
+    valuesToSet.push([value]);
 
   // Set the values for the entire column
   columnRange.setValues(valuesToSet);
